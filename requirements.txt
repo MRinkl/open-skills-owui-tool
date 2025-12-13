@@ -69,6 +69,7 @@ pdf2image
 pdfkit
 tabula-py
 reportlab[pycairo]
+fpdf2
 img2pdf
 
 # Math & Computing Libraries

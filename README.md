@@ -308,6 +308,68 @@ When connected, this server exposes these tools to your AI:
 - `list_skills` - List all available skills
 - `navigate_and_get_all_visible_text` - Web scraping with Playwright
 
+## OpenWebUI Integration
+
+Open-Skills can be integrated with [OpenWebUI](https://github.com/open-webui/open-webui) for a web-based AI chat interface with code execution capabilities.
+
+### OpenWebUI Tool
+
+The `open-skills-owui-tool/` directory contains a ready-to-use OpenWebUI tool that bridges to the MCP server:
+
+```bash
+# Install in OpenWebUI:
+# 1. Go to Workspace → Tools → Add Tool
+# 2. Copy contents of open-skills-owui-tool/open_skills_tool.py
+# 3. Save and enable for your models
+```
+
+### Docker Deployment (VPS/Server)
+
+For server deployments, use Docker with the provided configuration:
+
+```bash
+# Clone and build
+git clone https://github.com/BandarLabs/open-skills.git
+cd open-skills
+
+# Build the image
+docker build -t open-skills:local .
+
+# Run with Xvfb for full browser support
+docker run -d \
+  --name open-skills \
+  --network your-network \
+  -p 8222:8222 \
+  -v $(pwd)/uploads:/app/uploads \
+  -e FASTMCP_HOST=0.0.0.0 \
+  -e FASTMCP_PORT=8222 \
+  --restart unless-stopped \
+  open-skills:local
+```
+
+**Note:** For Docker networking, disable DNS rebinding protection by modifying `server.py`:
+```python
+from mcp.server.transport_security import TransportSecuritySettings
+transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+mcp = FastMCP("Open-Skills", transport_security=transport_security)
+```
+
+### File Server for Downloads
+
+To serve generated files (PDFs, images, etc.) securely:
+
+```bash
+# Run internal file server (no public port for security)
+docker run -d \
+  --name open-skills-files \
+  --network your-network \
+  -v /path/to/uploads/outputs:/usr/share/nginx/html:ro \
+  --restart unless-stopped \
+  nginx:alpine
+```
+
+Then proxy through your authenticated frontend. See `open-skills-owui-tool/` for integration examples.
+
 ## Learn More
 
 - **GitHub Repository:** [github.com/BandarLabs/open-skills](https://github.com/BandarLabs/open-skills)
