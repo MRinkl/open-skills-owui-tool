@@ -370,6 +370,59 @@ docker run -d \
 
 Then proxy through your authenticated frontend. See `open-skills-owui-tool/` for integration examples.
 
+## Native Tool Calling with OpenRouter (NEW)
+
+Open-Skills now supports **native function calling** through OpenWebUI with OpenRouter-compatible LLM providers. This enables real-time code execution, PDF generation, and file processing directly from chat.
+
+### What This Enables
+
+- **Code Execution**: Ask the AI to run Python code, and it executes in a sandboxed environment
+- **Document Creation**: Generate PDFs, spreadsheets, and presentations on-the-fly
+- **Web Scraping**: Extract content from websites using Playwright
+- **File Processing**: Manipulate images, extract data from documents, and more
+
+### Example Prompts
+
+```
+"Use Python to calculate 15 * 23"
+→ AI executes code, returns: 345
+
+"Create a PDF with Hello World and give me the download link"
+→ AI generates PDF, returns: Download: /api/files/hello_world.pdf
+
+"Scrape the main content from https://example.com"
+→ AI extracts and returns page content
+```
+
+### Setup for Custom Frontends
+
+If you're using a custom frontend with OpenWebUI's API, you may need the **Native Tool Calling Patches** in `patches/` to enable synchronous tool execution:
+
+```bash
+# Apply patches to your OpenWebUI backend container
+docker exec owui-backend python3 /tmp/apply_patch.py
+docker exec owui-backend python3 /tmp/apply_streaming_patch.py
+docker exec owui-backend python3 /tmp/fix_tool_calls_type.py
+docker restart owui-backend
+```
+
+See `patches/README.md` for detailed installation instructions.
+
+### How It Works
+
+1. **LLM receives tools**: The Open-Skills tool definitions are sent to the LLM via OpenRouter
+2. **LLM calls tools**: When needed, the LLM responds with `tool_calls`
+3. **Backend executes**: OpenWebUI executes the tools against the Open-Skills MCP server
+4. **Results returned**: Tool results are sent back to the LLM for final response
+
+### Supported Providers
+
+Works with any OpenRouter model that supports function calling:
+- OpenAI GPT-4, GPT-4o
+- Anthropic Claude 3.5, Claude 3
+- Google Gemini Pro
+- Groq, Cerebras, and more
+
 ## Learn More
 
 - **GitHub Repository:** [github.com/BandarLabs/open-skills](https://github.com/BandarLabs/open-skills)
