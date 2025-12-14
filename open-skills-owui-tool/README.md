@@ -1,162 +1,143 @@
 # Open Skills Tool for OpenWebUI
 
-This OpenWebUI tool provides a bridge to the [Open-Skills MCP server](https://github.com/BandarLabs/open-skills), enabling sandboxed Python code execution, Claude-compatible skills, and web scraping directly from OpenWebUI.
+An OpenWebUI tool that enables **sandboxed Python code execution**, **document generation**, and **web scraping** through the [Open-Skills MCP server](https://github.com/BandarLabs/open-skills).
 
-## Features
+## What It Does
 
-| Tool | Description |
-|------|-------------|
-| `execute_python_code` | Execute Python in a sandboxed Jupyter kernel (numpy, pandas, matplotlib, fpdf2, reportlab, etc.) |
-| `list_skills` | List all available skills (PDF manipulation, image processing, document creation) |
-| `get_skill_info` | Get detailed documentation for a specific skill |
-| `get_skill_file` | Retrieve any file from a skill's directory (scripts, examples, etc.) |
-| `navigate_and_get_all_visible_text` | Scrape text content from any webpage using Playwright with Xvfb |
+| Capability | Description |
+|------------|-------------|
+| **Code Execution** | Run Python in a sandboxed Jupyter kernel with 50+ packages (numpy, pandas, matplotlib, PIL, fpdf2, reportlab, etc.) |
+| **Document Generation** | Create PDFs, spreadsheets, presentations, and images on-the-fly |
+| **Web Scraping** | Extract text from any webpage using Playwright |
+| **Skills Library** | Access Claude-compatible skills for specialized tasks |
+
+---
 
 ## Installation
 
-### Option 1: Manual Installation (Recommended)
+### Step 1: Install the Tool in OpenWebUI
 
-1. In OpenWebUI, go to **Workspace** → **Tools** → **+** (Add Tool)
-2. Copy the entire contents of `open_skills_tool.py` and paste it into the tool editor
+1. Go to **Workspace** → **Tools** → **+** (Add Tool)
+2. Copy the contents of [`open_skills_tool.py`](open_skills_tool.py) into the editor
 3. Click **Save**
-4. Enable the tool for your desired models
 
-### Option 2: Database Script
+### Step 2: Enable for Your Model
 
-Use the provided script to add the tool directly to your database:
-```bash
-python add_tool_to_db.py /path/to/webui.db
-```
+1. Go to **Workspace** → **Models** → Select your model
+2. Under **Tools**, enable **Open Skills**
+3. Set **Function Calling** to `Native` (recommended) or `Default`
+
+### Step 3: Configure the MCP Server URL
+
+1. Click the **gear icon** next to the tool to open Valves
+2. Set `mcp_server_url` to your Open-Skills server:
+   - Docker (same network): `http://open-skills:8222/mcp`
+   - Docker (localhost): `http://localhost:8222/mcp`
+   - Mac local: `http://open-skills.local:8222/mcp`
+
+---
 
 ## Prerequisites
 
-The Open-Skills MCP server must be running. See the [main repository](https://github.com/BandarLabs/open-skills) for installation:
+You need the **Open-Skills MCP server** running. Quick setup:
 
 ```bash
-# Local installation (Mac with Apple Silicon)
+# Clone and run
 git clone https://github.com/BandarLabs/open-skills.git
 cd open-skills
-chmod +x install.sh
-./install.sh
-```
-
-### Docker Deployment
-
-For server/VPS deployments:
-
-```bash
-# Build the image
-cd open-skills
 docker build -t open-skills:local .
-
-# Run the container
-docker run -d \
-  --name open-skills \
-  --network your-network \
-  -p 8222:8222 \
+docker run -d --name open-skills -p 8222:8222 \
   -v $(pwd)/uploads:/app/uploads \
   -e FASTMCP_HOST=0.0.0.0 \
-  -e FASTMCP_PORT=8222 \
-  -e DISPLAY=:99 \
-  --restart unless-stopped \
   open-skills:local
-```
 
-### Initial Setup (Docker)
-
-```bash
-# Copy skills to uploads directory
+# Initialize skills and outputs
 cp -r skills/ uploads/skills/
-
-# Create outputs directory for generated files
-mkdir -p uploads/outputs
-chmod 777 uploads/outputs
+mkdir -p uploads/outputs && chmod 777 uploads/outputs
 ```
 
-## Configuration
+See the [main repository](https://github.com/BandarLabs/open-skills) for detailed installation options.
 
-Configure via **Valves** in OpenWebUI settings:
+---
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `mcp_server_url` | `http://open-skills.local:8222/mcp` | URL of the MCP server |
-| `timeout_seconds` | `600` | Timeout for code execution (10 minutes) |
+## Usage Examples
 
-### Environment-Specific URLs
+| Prompt | What Happens |
+|--------|--------------|
+| *"Calculate 15 * 23 using Python"* | Executes code, returns `345` |
+| *"Create a PDF with a summary of quantum computing"* | Generates PDF, returns download link |
+| *"Scrape the main content from https://example.com"* | Extracts and returns page text |
+| *"List available skills"* | Shows all installed skills |
 
-| Environment | URL |
-|-------------|-----|
-| Apple Container (local) | `http://open-skills.local:8222/mcp` |
-| Docker (localhost) | `http://localhost:8222/mcp` |
-| Docker (internal network) | `http://open-skills:8222/mcp` |
+### File Downloads
 
-## File Downloads
+Generated files are saved to `/app/uploads/outputs/` and accessible via:
+```
+/api/files/<filename>
+```
 
-Generated files (PDFs, images, etc.) are saved to `/app/uploads/outputs/` inside the container.
+---
 
-**Host path**: `~/.open-skills/assets/outputs/` (local) or your mounted volume path (Docker)
+## Native Tool Calling Patches (For Custom Frontends)
 
-For secure file serving in production, consider:
-- Using an authenticated proxy route in your frontend
-- Serving files through your existing web server with auth
-- Using pre-signed URLs
+If you're using a **custom frontend** (not the native OpenWebUI interface), tool calls may return blank responses. This is because OpenWebUI's native function calling requires WebSocket metadata that custom frontends don't provide.
 
-## Example Prompts
+### The Fix
 
-- *"Run Python code to calculate the first 20 Fibonacci numbers"*
-- *"Create a bar chart from this data and save it as a PDF"*
-- *"Search GitHub for popular AI agent repos and create a summary PDF"*
-- *"Extract text from this webpage: https://example.com"*
-
-## Native Tool Calling for Custom Frontends
-
-If you're using a **custom frontend** with OpenWebUI's API (not the native OWUI interface), tool calls may return blank responses. This happens because native function calling requires WebSocket metadata that custom frontends don't provide.
-
-### Applying the Patches
-
-The `patches/` directory contains fixes that enable synchronous tool execution:
+Apply these patches to your OpenWebUI backend container:
 
 ```bash
-# Copy and apply patches to your OpenWebUI backend
+# 1. Copy patches to server
 scp patches/*.py user@your-server:/tmp/
+
+# 2. Copy into container
 docker cp /tmp/apply_patch.py owui-backend:/tmp/
 docker cp /tmp/apply_streaming_patch.py owui-backend:/tmp/
 docker cp /tmp/fix_tool_calls_type.py owui-backend:/tmp/
 docker cp /tmp/fix_streaming_section.py owui-backend:/tmp/
 
-# Run patches
+# 3. Apply patches
 docker exec owui-backend python3 /tmp/apply_patch.py
 docker exec owui-backend python3 /tmp/apply_streaming_patch.py
 docker exec owui-backend python3 /tmp/fix_tool_calls_type.py
 docker exec owui-backend python3 /tmp/fix_streaming_section.py
 
-# Restart
+# 4. Restart backend
 docker restart owui-backend
 ```
 
-See `patches/README.md` for full details.
+### Verify Patches Applied
+
+```bash
+docker exec owui-backend grep -n "SYNC_TOOL_PATCH" \
+  /app/backend/open_webui/utils/middleware.py
+```
+
+Expected output shows line numbers where patches are active.
+
+### What the Patches Do
+
+1. **Detect** tool calls in LLM responses (streaming and non-streaming)
+2. **Execute** tools synchronously without requiring WebSocket
+3. **Format** tool calls with required `type: "function"` field for OpenRouter
+4. **Make follow-up LLM call** with results and return final response
+
+> ⚠️ **Note:** Patches are not persistent across container rebuilds. Add to your deployment pipeline for persistence.
+
+---
 
 ## Troubleshooting
 
-### "Cannot connect to MCP server"
-- Verify the server is running: `docker logs open-skills` or `container logs open-skills`
-- Check the URL in Valves matches your setup
-- Ensure network connectivity between OpenWebUI and Open-Skills containers
+| Issue | Solution |
+|-------|----------|
+| "Cannot connect to MCP server" | Check server is running: `docker logs open-skills` |
+| "ModuleNotFoundError" | Install package: `docker exec open-skills pip install <pkg>` |
+| Blank response (custom frontend) | Apply native tool calling patches (see above) |
+| Tool not appearing | Ensure tool is enabled for your model |
 
-### "ModuleNotFoundError"
-- Some packages may need to be installed: `docker exec open-skills pip install <package>`
-- Rebuild the image for persistence
-
-### "No skills found"
-- Ensure skills are copied to the uploads directory
-- Restart the container: `docker restart open-skills`
-
-### "Blank response when using tools" (Custom Frontends)
-- Apply the native tool calling patches (see above)
-- Ensure function calling is set to "native" in model settings
-- Check backend logs for `SYNC_TOOL_PATCH` messages
+---
 
 ## License
 
-MIT - See the main [Open-Skills repository](https://github.com/BandarLabs/open-skills) for details.
+MIT - Part of the [Open-Skills](https://github.com/BandarLabs/open-skills) project.
 
