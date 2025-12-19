@@ -1,15 +1,37 @@
 # Open Skills Tool for OpenWebUI
 
+> **Version 1.2.2** | [MIT License](LICENSE) | Part of [Open-Skills](https://github.com/BandarLabs/open-skills)
+
 An OpenWebUI tool that enables **sandboxed Python code execution**, **document generation**, and **web scraping** through the [Open-Skills MCP server](https://github.com/BandarLabs/open-skills).
 
-## What It Does
+## Features
 
-| Capability | Description |
-|------------|-------------|
-| **Code Execution** | Run Python in a sandboxed Jupyter kernel with 50+ packages (numpy, pandas, matplotlib, PIL, fpdf2, reportlab, etc.) |
-| **Document Generation** | Create PDFs, spreadsheets, presentations, and images on-the-fly |
-| **Web Scraping** | Extract text from any webpage using Playwright |
-| **Skills Library** | Access Claude-compatible skills for specialized tasks |
+### 🐍 Sandboxed Python Execution
+Execute Python code in isolated Jupyter kernels with full package support:
+- **50+ pre-installed packages**: numpy, pandas, matplotlib, PIL/Pillow, fpdf2, reportlab, PyPDF2, python-docx, openpyxl, requests, beautifulsoup4, and more
+- **Kernel pool management**: Automatic kernel allocation and cleanup for concurrent execution
+- **File I/O support**: Read from and write to persistent storage
+- **Timeout protection**: Configurable execution timeouts (default: 10 minutes)
+
+### 📄 Document Generation
+Create various document types on-the-fly:
+- **PDF creation** with reportlab, fpdf2, or PyPDF2
+- **Word documents** (.docx) with python-docx
+- **Excel spreadsheets** (.xlsx) with openpyxl
+- **Images** with PIL/Pillow and matplotlib
+- **ASCII art** with guided string patterns (see tips below)
+
+### 🌐 Web Scraping
+Extract content from any webpage using Playwright:
+- Headless browser automation
+- JavaScript-rendered content extraction
+- Full page text scraping
+
+### 📚 Skills Library
+Access Claude-compatible skills for specialized tasks:
+- List available skills with `list_skills()`
+- Get detailed documentation with `get_skill_info(skill_name)`
+- Access skill files with `get_skill_file(skill_name, filename)`
 
 ---
 
@@ -66,6 +88,7 @@ See the [main repository](https://github.com/BandarLabs/open-skills) for detaile
 |--------|--------------|
 | *"Calculate 15 * 23 using Python"* | Executes code, returns `345` |
 | *"Create a PDF with a summary of quantum computing"* | Generates PDF, returns download link |
+| *"Create a PDF with ASCII art of a robot"* | Generates ASCII art PDF using list-of-strings pattern |
 | *"Scrape the main content from https://example.com"* | Extracts and returns page text |
 | *"List available skills"* | Shows all installed skills |
 
@@ -78,49 +101,68 @@ Generated files are saved to `/app/uploads/outputs/` and accessible via:
 
 ---
 
-## Native Tool Calling Patches (For Custom Frontends)
+## Tips for PDF and ASCII Art Creation
 
-If you're using a **custom frontend** (not the native OpenWebUI interface), tool calls may return blank responses. This is because OpenWebUI's native function calling requires WebSocket metadata that custom frontends don't provide.
+The tool includes built-in guidance for generating valid Python code. Key tips:
 
-### The Fix
+### PDF Creation
+- Use **only ASCII characters** - no emojis, special dashes, or unicode
+- Use regular hyphen (`-`) not en-dash or non-breaking hyphen
+- Use asterisk (`*`) instead of star emoji
 
-Apply these patches to your OpenWebUI backend container:
+### ASCII Art (Critical)
+To avoid syntax errors with complex text patterns:
+- **Compose ASCII art as a list of strings** first, then join with newlines
+- **Never use triple-quoted strings** with complex escape sequences
+
+```python
+# ✅ Correct pattern
+art_lines = [
+    "  ___  ",
+    " |   | ",
+    " |___| "
+]
+ascii_art = "\n".join(art_lines)
+
+# ❌ Avoid this - can cause SyntaxError
+ascii_art = """
+  ___
+ |   |
+ |___|
+"""
+```
+
+---
+
+## Native Tool Calling for Custom Frontends
+
+If you're using a **custom frontend** (not the native OpenWebUI interface), you may need to implement client-side tool execution. OpenWebUI's `/api/chat/completions` endpoint returns `finish_reason: "tool_calls"` but does not execute tools for external API clients.
+
+### Option 1: Frontend Tool Execution Loop
+
+Implement a tool execution loop in your frontend:
+1. Detect `finish_reason: "tool_calls"` in the response
+2. Execute tools via the MCP server directly
+3. Send results back in a follow-up request
+4. Repeat until `finish_reason: "stop"`
+
+### Option 2: Apply Backend Patches
+
+Apply patches to your OpenWebUI backend container for synchronous tool execution:
 
 ```bash
-# 1. Copy patches to server
-scp patches/*.py user@your-server:/tmp/
+# Copy patches into container
+docker cp patches/*.py owui-backend:/tmp/
 
-# 2. Copy into container
-docker cp /tmp/apply_patch.py owui-backend:/tmp/
-docker cp /tmp/apply_streaming_patch.py owui-backend:/tmp/
-docker cp /tmp/fix_tool_calls_type.py owui-backend:/tmp/
-docker cp /tmp/fix_streaming_section.py owui-backend:/tmp/
-
-# 3. Apply patches
+# Apply patches
 docker exec owui-backend python3 /tmp/apply_patch.py
 docker exec owui-backend python3 /tmp/apply_streaming_patch.py
 docker exec owui-backend python3 /tmp/fix_tool_calls_type.py
 docker exec owui-backend python3 /tmp/fix_streaming_section.py
 
-# 4. Restart backend
+# Restart backend
 docker restart owui-backend
 ```
-
-### Verify Patches Applied
-
-```bash
-docker exec owui-backend grep -n "SYNC_TOOL_PATCH" \
-  /app/backend/open_webui/utils/middleware.py
-```
-
-Expected output shows line numbers where patches are active.
-
-### What the Patches Do
-
-1. **Detect** tool calls in LLM responses (streaming and non-streaming)
-2. **Execute** tools synchronously without requiring WebSocket
-3. **Format** tool calls with required `type: "function"` field for OpenRouter
-4. **Make follow-up LLM call** with results and return final response
 
 > ⚠️ **Note:** Patches are not persistent across container rebuilds. Add to your deployment pipeline for persistence.
 
@@ -132,12 +174,25 @@ Expected output shows line numbers where patches are active.
 |-------|----------|
 | "Cannot connect to MCP server" | Check server is running: `docker logs open-skills` |
 | "ModuleNotFoundError" | Install package: `docker exec open-skills pip install <pkg>` |
-| Blank response (custom frontend) | Apply native tool calling patches (see above) |
+| SyntaxError with ASCII art | Use list-of-strings pattern (see tips above) |
+| Blank response (custom frontend) | Implement frontend tool loop or apply patches |
 | Tool not appearing | Ensure tool is enabled for your model |
+| Timeout errors | Increase `timeout_seconds` in tool valves |
+
+---
+
+## Version History
+
+| Version | Changes |
+|---------|---------|
+| **1.2.2** | Added ASCII art guidance, improved PDF creation tips |
+| **1.2.1** | Added web scraping with Playwright |
+| **1.2.0** | MCP client integration, kernel pool management |
+| **1.1.0** | Skills library support |
+| **1.0.0** | Initial release with code execution |
 
 ---
 
 ## License
 
 MIT - Part of the [Open-Skills](https://github.com/BandarLabs/open-skills) project.
-
