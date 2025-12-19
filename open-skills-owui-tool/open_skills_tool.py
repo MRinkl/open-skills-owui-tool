@@ -115,6 +115,20 @@ class Tools:
         - Use asterisk (*) instead of star emoji.
         - For reportlab, register fonts if you need unicode support.
 
+        ASCII ART AND COMPLEX TEXT PATTERNS (CRITICAL):
+        - FIRST compose your ASCII art as a simple Python variable BEFORE writing PDF code
+        - Use a LIST of strings for each line, then join with newlines
+        - Example pattern:
+            art_lines = [
+                "  ___  ",
+                " |   | ",
+                " |___| "
+            ]
+            ascii_art = "\n".join(art_lines)
+        - NEVER use triple-quoted strings with complex escape sequences
+        - Avoid backslashes in the art - use simple box-drawing: | - _ / \ + *
+        - Keep art simple and test it works as valid Python first
+
         :param command: The Python code to execute as a string.
         :return: The output from code execution, including stdout and return values.
         """
